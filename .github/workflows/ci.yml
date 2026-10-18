@@ -1,8 +1,76 @@
+
 name: CI/CD Pipeline
 
-"on":
+on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Check code syntax
+        run: python -m py_compile app.py test_app.py
+
+      - name: Create artifact
+        run: |
+          mkdir -p artifact
+          cp app.py requirements.txt README.md artifact/
+          echo "Build completed" > artifact/build-info.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: student-app-artifact
+          path: artifact/
+          retention-days: 7
+
+  deploy-test:
+    name: Deploy to Test Environment
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: student-app-artifact
+          path: ./deploy
+
+      - name: Check artifact
+        run: |
+          ls -la ./deploy
+          test -f ./deploy/app.py
+          test -f ./deploy/requirements.txt
+          echo "Artifact check passed"
+
+      - name: Simulate deployment
+        run: |
+          echo "Application: StudentSpace"
+          echo "Environment: test"
+          echo "Status: deployment simulation successful"
